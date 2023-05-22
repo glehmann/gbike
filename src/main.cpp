@@ -105,6 +105,7 @@ void setup() {
   pinMode(ACCELERATOR_PIN, INPUT);
   lastOutputSwitch = millis();
 
+  pinMode(ROTOR_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(ROTOR_PIN), onRotorInterrupt, CHANGE);
 }
 
