@@ -14,6 +14,11 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 unsigned long lastOutputSwitch = 0;
 unsigned long lastStatOutput = 0;
 bool status = false;
+unsigned long lastLoop = 0;
+unsigned long loopDurationMin = ULONG_MAX;
+unsigned long loopDurationMax = 0;
+unsigned long loopDurationSum = 0;
+unsigned long loopCount = 0;
 
 // accelerator reading
 #define ACCELERATOR_SAMPLES 10
@@ -104,9 +109,17 @@ void setup() {
 }
 
 void loop() {
+  unsigned long currentMillis = millis();
+  unsigned long loopDuration = currentMillis - lastLoop;
+  loopDurationSum += loopDuration;
+  loopCount++;
+  if (lastLoop != 0) {
+    loopDurationMin = min(loopDurationMin, loopDuration);
+    loopDurationMax = max(loopDurationMax, loopDuration);
+  }
+  lastLoop = currentMillis;
   readAccelerator();
   detectRotorInactivity();
-  unsigned long currentMillis = millis();
   if (accelerator < 10 && rotorInterval == UINT_MAX) {
     resetOutput();
   } else {
@@ -129,6 +142,13 @@ void loop() {
     Serial.print(rotorInterval);
     Serial.print(", rotorIntervalMin: ");
     Serial.println(rotorIntervalMin);
+    // loop
+    Serial.print("loopDurationAvg: ");
+    Serial.print(float(loopDurationSum) / loopCount);
+    Serial.print(", loopDurationMin: ");
+    Serial.print(loopDurationMin);
+    Serial.print(", loopDurationMax: ");
+    Serial.println(loopDurationMax);
 
     Serial.println();
   }
