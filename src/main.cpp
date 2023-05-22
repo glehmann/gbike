@@ -21,13 +21,18 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 // (We could use the same macros for the RX LED too -- RXLED1,
 //  and RXLED0.)
 
+#define ROTOR_PIN PIN3
+#define ACCELERATOR_PIN A3
 
 // time in milliseconds
 unsigned long lastOutputSwitch = 0;
 bool status = false;
 
 // accelerator reading
-int acceleratorValues[10];
+#define ACCELERATOR_SAMPLES 10
+#define ACCELERATOR_MIN 250
+#define ACCELERATOR_MAX 802
+int acceleratorValues[ACCELERATOR_SAMPLES];
 int acceleratorIndex = 0;
 unsigned int accelerator = 0;
 
@@ -36,15 +41,15 @@ volatile unsigned long rotorLastSwitch = 0;
 volatile unsigned int rotorInterval = UINT_MAX;
 
 void readAccelerator() {
-  acceleratorValues[acceleratorIndex] = analogRead(A3);
-  acceleratorIndex = (acceleratorIndex + 1) % 10;
+  acceleratorValues[acceleratorIndex] = analogRead(ACCELERATOR_PIN);
+  acceleratorIndex = (acceleratorIndex + 1) % ACCELERATOR_SAMPLES;
   float sum = 0;
-  for(int i = 0; i < 10; i++) {
+  for(int i = 0; i < ACCELERATOR_SAMPLES; i++) {
     sum += acceleratorValues[i];
   }
-  sum /= 10;
-  sum -= 250.0; // base value
-  sum *= 1024.0 / (800.0 - 250.0); // scale to 0 - 1024
+  sum /= ACCELERATOR_SAMPLES;
+  sum -= ACCELERATOR_MIN;
+  sum *= 1024.0 / (ACCELERATOR_MAX - ACCELERATOR_MIN);
   sum = max(0.0, sum);
   sum = min(1024.0, sum);
   accelerator = (unsigned int)(sum);
@@ -93,14 +98,14 @@ void setup() {
   Serial.begin(9600); //This pipes to the serial monitor
   Serial.println("Initialize Serial Monitor");
 
-  for(int i = 0; i < 10; i++) {
+  for(int i = 0; i < ACCELERATOR_SAMPLES; i++) {
     acceleratorValues[i] = 0;
   }
 
-  pinMode(A3, INPUT);
+  pinMode(ACCELERATOR_PIN, INPUT);
   lastOutputSwitch = millis();
 
-  attachInterrupt(digitalPinToInterrupt(PIN3), onRotorInterrupt, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN), onRotorInterrupt, CHANGE);
 }
 
 void loop() {
