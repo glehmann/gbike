@@ -29,30 +29,11 @@ bool status = false;
 // accelerator reading
 int acceleratorValues[10];
 int acceleratorIndex = 0;
-int accelerator = 0;
+unsigned int accelerator = 0;
 
 // rotor reading
-int rotorValues[10];
-int rotorIndex = 0;
-int rotorLastValue = 0;
-unsigned long rotorLastSwitch = 0;
-unsigned int rotorInterval = UINT_MAX;
-
-void setup()
-{
-  pinMode(RXLED, OUTPUT);  // Set RX LED as an output
-  // TX LED is set as an output behind the scenes
-
-  Serial.begin(9600); //This pipes to the serial monitor
-  Serial.println("Initialize Serial Monitor");
-
-  for(int i = 0; i < 10; i++) {
-    acceleratorValues[i] = 0;
-  }
-
-  pinMode(A3, INPUT);
-  lastOutputSwitch = millis();
-}
+volatile unsigned long rotorLastSwitch = 0;
+volatile unsigned int rotorInterval = UINT_MAX;
 
 void readAccelerator() {
   acceleratorValues[acceleratorIndex] = analogRead(A3);
@@ -66,24 +47,21 @@ void readAccelerator() {
   sum *= 1024.0 / (800.0 - 250.0); // scale to 0 - 1024
   sum = max(0.0, sum);
   sum = min(1024.0, sum);
-  accelerator = int(sum);
+  accelerator = (unsigned int)(sum);
 }
 
-void readRotor() {
-  rotorValues[rotorIndex] = analogRead(A4);
-  rotorIndex = (rotorIndex + 1) % 10;
-  float sum = 0;
-  for(int i = 0; i < 10; i++) {
-    sum += rotorValues[i];
-  }
-  int rotor = sum / 10;
+void onRotorInterrupt() {
   unsigned long currentMillis = millis();
-  if (rotorLastValue < 512 && rotor > 512) {
+  if (rotorLastSwitch != 0) {
     rotorInterval = currentMillis - rotorLastSwitch;
-    rotorLastSwitch = currentMillis;
-    rotorLastValue = rotor;
-  } else if (currentMillis - rotorLastSwitch > 1000) {
+  }
+  rotorLastSwitch = currentMillis;
+}
+
+void detectRotorInactivity() {
+  if (millis() - rotorLastSwitch > 500) {
     rotorInterval = UINT_MAX;
+    rotorLastSwitch = 0;
   }
 }
 
@@ -105,13 +83,29 @@ void resetOutput() {
 }
 
 unsigned int interval() {
-  return min(10 * 1024 / accelerator, rotorInterval / 2);
+  return min(10 * 1024 / accelerator, rotorInterval);
 }
 
-void loop()
-{
+void setup() {
+  pinMode(RXLED, OUTPUT);  // Set RX LED as an output
+  // TX LED is set as an output behind the scenes
+
+  Serial.begin(9600); //This pipes to the serial monitor
+  Serial.println("Initialize Serial Monitor");
+
+  for(int i = 0; i < 10; i++) {
+    acceleratorValues[i] = 0;
+  }
+
+  pinMode(A3, INPUT);
+  lastOutputSwitch = millis();
+
+  attachInterrupt(digitalPinToInterrupt(PIN3), onRotorInterrupt, CHANGE);
+}
+
+void loop() {
   readAccelerator();
-  readRotor();
+  detectRotorInactivity();
   if (accelerator < 10 && rotorInterval == UINT_MAX) {
     resetOutput();
   } else {
