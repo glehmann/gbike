@@ -1,20 +1,6 @@
 #include <Arduino.h>
 #include <limits.h>
 
-/* Pro Micro Test Code
-   by: Nathan Seidle
-   modified by: Jim Lindblom
-   SparkFun Electronics
-   date: September 16, 2013
-   license: Public Domain - please use this code however you'd like.
-   It's provided as a learning tool.
-
-   This code is provided to show how to control the SparkFun
-   ProMicro's TX and RX LEDs within a sketch. It also serves
-   to explain the difference between Serial.print() and
-   Serial1.print().
-*/
-
 int RXLED = 17;  // The RX LED has a defined Arduino pin
 // Note: The TX LED was not so lucky, we'll need to use pre-defined
 // macros (TXLED1, TXLED0) to control that.
@@ -26,6 +12,7 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 
 // time in milliseconds
 unsigned long lastOutputSwitch = 0;
+unsigned long lastStatOutput = 0;
 bool status = false;
 
 // accelerator reading
@@ -35,13 +22,19 @@ bool status = false;
 int acceleratorValues[ACCELERATOR_SAMPLES];
 int acceleratorIndex = 0;
 unsigned int accelerator = 0;
+unsigned int acceleratorMin = UINT_MAX;
+unsigned int acceleratorMax = 0;
 
 // rotor reading
 volatile unsigned long rotorLastSwitch = 0;
 volatile unsigned int rotorInterval = UINT_MAX;
+unsigned int rotorIntervalMin = UINT_MAX;
 
 void readAccelerator() {
-  acceleratorValues[acceleratorIndex] = analogRead(ACCELERATOR_PIN);
+  unsigned int value = analogRead(ACCELERATOR_PIN);
+  acceleratorMin = min(acceleratorMin, value);
+  acceleratorMax = max(acceleratorMax, value);
+  acceleratorValues[acceleratorIndex] = value;
   acceleratorIndex = (acceleratorIndex + 1) % ACCELERATOR_SAMPLES;
   float sum = 0;
   for(int i = 0; i < ACCELERATOR_SAMPLES; i++) {
@@ -59,6 +52,7 @@ void onRotorInterrupt() {
   unsigned long currentMillis = millis();
   if (rotorLastSwitch != 0) {
     rotorInterval = currentMillis - rotorLastSwitch;
+    rotorIntervalMin = min(rotorIntervalMin, rotorInterval);
   }
   rotorLastSwitch = currentMillis;
 }
@@ -112,13 +106,30 @@ void setup() {
 void loop() {
   readAccelerator();
   detectRotorInactivity();
+  unsigned long currentMillis = millis();
   if (accelerator < 10 && rotorInterval == UINT_MAX) {
     resetOutput();
   } else {
-    unsigned long currentMillis = millis();
     if (currentMillis - lastOutputSwitch >= interval()) {
       lastOutputSwitch = currentMillis;
       switchOutput();
     }
+  }
+  if (currentMillis - lastStatOutput >= 1000) {
+    lastStatOutput = currentMillis;
+    // accelerator
+    Serial.print("accelerator: ");
+    Serial.print(accelerator);
+    Serial.print(", acceleratorMin: ");
+    Serial.print(acceleratorMin);
+    Serial.print(", acceleratorMax: ");
+    Serial.println(acceleratorMax);
+    // rotor
+    Serial.print("rotorInterval: ");
+    Serial.print(rotorInterval);
+    Serial.print(", rotorIntervalMin: ");
+    Serial.println(rotorIntervalMin);
+
+    Serial.println();
   }
 }
