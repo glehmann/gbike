@@ -31,8 +31,11 @@ unsigned int acceleratorMin = UINT_MAX;
 unsigned int acceleratorMax = 0;
 
 // rotor reading
+#define ROTOR_SAMPLES 4
 volatile unsigned long rotorLastSwitch = 0;
-volatile unsigned int rotorInterval = UINT_MAX;
+volatile unsigned int rotorIntervals[ROTOR_SAMPLES];
+volatile unsigned int rotorIntervalsIndex = 0;
+unsigned int rotorInterval = UINT_MAX;
 unsigned int rotorIntervalMin = UINT_MAX;
 
 void readAccelerator() {
@@ -56,17 +59,26 @@ void readAccelerator() {
 void onRotorInterrupt() {
   unsigned long currentMillis = millis();
   if (rotorLastSwitch != 0) {
-    rotorInterval = currentMillis - rotorLastSwitch;
-    rotorIntervalMin = min(rotorIntervalMin, rotorInterval);
+    rotorIntervals[rotorIntervalsIndex] = currentMillis - rotorLastSwitch;
+    rotorIntervalMin = min(rotorIntervalMin, rotorIntervals[rotorIntervalsIndex]);
+    rotorIntervalsIndex++;
   }
   rotorLastSwitch = currentMillis;
 }
 
-void detectRotorInactivity() {
+void updateRotorValues() {
   if (millis() - rotorLastSwitch > 500) {
     rotorInterval = UINT_MAX;
     rotorLastSwitch = 0;
+    for(int i = 0; i < ROTOR_SAMPLES; i++) {
+      rotorIntervals[i] = UINT_MAX;
+    }
   }
+  unsigned long sum = 0;
+  for(int i = 0; i < ROTOR_SAMPLES; i++) {
+    sum += rotorIntervals[i];
+  }
+  rotorInterval = sum / ROTOR_SAMPLES;
 }
 
 void switchOutput() {
@@ -100,12 +112,15 @@ void setup() {
   for(int i = 0; i < ACCELERATOR_SAMPLES; i++) {
     acceleratorValues[i] = 0;
   }
-
   pinMode(ACCELERATOR_PIN, INPUT);
-  lastOutputSwitch = millis();
 
+  for(int i = 0; i < ROTOR_SAMPLES; i++) {
+    rotorIntervals[i] = UINT_MAX;
+  }
   pinMode(ROTOR_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(ROTOR_PIN), onRotorInterrupt, CHANGE);
+
+  lastOutputSwitch = millis();
 }
 
 void loop() {
@@ -119,7 +134,7 @@ void loop() {
   }
   lastLoop = currentMillis;
   readAccelerator();
-  detectRotorInactivity();
+  updateRotorValues();
   if (accelerator < 10 && rotorInterval == UINT_MAX) {
     resetOutput();
   } else {
