@@ -9,12 +9,16 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 
 #define ROTOR_PIN PIN3
 #define ACCELERATOR_PIN A3
-#define OUTPUT_PIN 9
+#define OUTPUT_PIN1 9
+#define OUTPUT_PIN2 10
+
+// output status
+bool outStatus1 = false;
+bool outStatus2 = false;
 
 // time in milliseconds
 unsigned long lastOutputSwitch = 0;
 unsigned long lastStatOutput = 0;
-bool status = false;
 unsigned long lastLoop = 0;
 unsigned long loopDurationMin = ULONG_MAX;
 unsigned long loopDurationMax = 0;
@@ -82,24 +86,38 @@ void updateRotorValues() {
   rotorInterval = sum / ROTOR_SAMPLES;
 }
 
-void switchOutput() {
-  status = !status;
-  if (status) {
-    digitalWrite(OUTPUT_PIN, LOW);
+void switchOutput1() {
+  outStatus1 = !outStatus1;
+  if (outStatus1) {
+    digitalWrite(OUTPUT_PIN1, LOW);
     digitalWrite(RXLED, LOW);   // set the RX LED ON
-    TXLED0; //TX LED is not tied to a normally controlled pin so a macro is needed, turn LED OFF
   } else {
-    digitalWrite(OUTPUT_PIN, HIGH);
+    digitalWrite(OUTPUT_PIN1, HIGH);
     digitalWrite(RXLED, HIGH);    // set the RX LED OFF
-    TXLED1; //TX LED macro to turn LED ON
   }
 }
 
-void resetOutput() {
-  status = false;
-  digitalWrite(RXLED, HIGH);
-  TXLED0;
-  digitalWrite(OUTPUT_PIN, HIGH);
+void switchOutput2() {
+  outStatus2 = !outStatus2;
+  if (outStatus2) {
+    digitalWrite(OUTPUT_PIN2, LOW);
+    TXLED1; //TX LED macro to turn LED ON
+  } else {
+    digitalWrite(OUTPUT_PIN2, HIGH);
+    TXLED0; //TX LED is not tied to a normally controlled pin so a macro is needed, turn LED OFF
+  }
+}
+
+void resetOutputs() {
+  if (outStatus1 || outStatus2) {
+    outStatus1 = false;
+    digitalWrite(RXLED, HIGH);
+    digitalWrite(OUTPUT_PIN1, HIGH);
+
+    outStatus2 = false;
+    TXLED0;
+    digitalWrite(OUTPUT_PIN2, HIGH);
+  }
 }
 
 unsigned int interval() {
@@ -107,12 +125,12 @@ unsigned int interval() {
 }
 
 void setup() {
-  pinMode(OUTPUT_PIN, OUTPUT);
+  pinMode(OUTPUT_PIN1, OUTPUT);
+  pinMode(OUTPUT_PIN2, OUTPUT);
   pinMode(RXLED, OUTPUT);  // Set RX LED as an output
   // TX LED is set as an output behind the scenes
 
   Serial.begin(9600); //This pipes to the serial monitor
-  Serial.println("Initialize Serial Monitor");
 
   for(int i = 0; i < ACCELERATOR_SAMPLES; i++) {
     acceleratorValues[i] = 0;
@@ -141,11 +159,14 @@ void loop() {
   readAccelerator();
   updateRotorValues();
   if (accelerator < 10 && rotorInterval == UINT_MAX) {
-    resetOutput();
+    resetOutputs();
   } else {
     if (currentMillis - lastOutputSwitch >= interval()) {
       lastOutputSwitch = currentMillis;
-      switchOutput();
+      switchOutput1();
+    }
+    if (currentMillis - lastOutputSwitch >= interval() / 3 && outStatus1 != outStatus2) {
+      switchOutput2();
     }
   }
   if (currentMillis - lastStatOutput >= 1000) {
