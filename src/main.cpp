@@ -9,6 +9,7 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 
 #define ROTOR_PIN PIN3
 #define ACCELERATOR_PIN A3
+#define OUTPUT_PIN 9
 
 // time in milliseconds
 unsigned long lastOutputSwitch = 0;
@@ -84,9 +85,11 @@ void updateRotorValues() {
 void switchOutput() {
   status = !status;
   if (status) {
+    digitalWrite(OUTPUT_PIN, LOW);
     digitalWrite(RXLED, LOW);   // set the RX LED ON
     TXLED0; //TX LED is not tied to a normally controlled pin so a macro is needed, turn LED OFF
   } else {
+    digitalWrite(OUTPUT_PIN, HIGH);
     digitalWrite(RXLED, HIGH);    // set the RX LED OFF
     TXLED1; //TX LED macro to turn LED ON
   }
@@ -96,6 +99,7 @@ void resetOutput() {
   status = false;
   digitalWrite(RXLED, HIGH);
   TXLED0;
+  digitalWrite(OUTPUT_PIN, HIGH);
 }
 
 unsigned int interval() {
@@ -103,6 +107,7 @@ unsigned int interval() {
 }
 
 void setup() {
+  pinMode(OUTPUT_PIN, OUTPUT);
   pinMode(RXLED, OUTPUT);  // Set RX LED as an output
   // TX LED is set as an output behind the scenes
 
@@ -167,4 +172,5 @@ void loop() {
 
     Serial.println();
   }
+  // delayMicroseconds(500);
 }
