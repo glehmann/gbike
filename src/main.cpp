@@ -7,19 +7,20 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 // (We could use the same macros for the RX LED too -- RXLED1,
 //  and RXLED0.)
 
-#define ROTOR_PIN PIN3
 #define ACCELERATOR_PIN A3
-#define OUTPUT_PIN1 9
-#define OUTPUT_PIN2 10
+#define ROTOR_PIN1 9
+#define OUTPUT_PIN1 8
+#define ROTOR_PIN2 10
+#define OUTPUT_PIN2 16
 
 // output status
-bool outStatus1 = false;
-bool outStatus2 = false;
+bool outputStatus1 = false;
+bool outputStatus2 = false;
 
 // time in milliseconds
-unsigned long lastOutputSwitch = 0;
+unsigned long lastOutputSwitchT = 0;
 unsigned long lastStatOutput = 0;
-unsigned long lastLoop = 0;
+unsigned long lastLoopT = 0;
 unsigned long loopDurationMin = ULONG_MAX;
 unsigned long loopDurationMax = 0;
 unsigned long loopDurationSum = 0;
@@ -34,14 +35,6 @@ int acceleratorIndex = 0;
 unsigned int accelerator = 0;
 unsigned int acceleratorMin = UINT_MAX;
 unsigned int acceleratorMax = 0;
-
-// rotor reading
-#define ROTOR_SAMPLES 4
-volatile unsigned long rotorLastSwitch = 0;
-volatile unsigned int rotorIntervals[ROTOR_SAMPLES];
-volatile unsigned int rotorIntervalsIndex = 0;
-unsigned int rotorInterval = UINT_MAX;
-unsigned int rotorIntervalMin = UINT_MAX;
 
 void readAccelerator() {
   unsigned int value = analogRead(ACCELERATOR_PIN);
@@ -61,34 +54,9 @@ void readAccelerator() {
   accelerator = (unsigned int)(sum);
 }
 
-void onRotorInterrupt() {
-  unsigned long currentMillis = millis();
-  if (rotorLastSwitch != 0) {
-    rotorIntervals[rotorIntervalsIndex] = currentMillis - rotorLastSwitch;
-    rotorIntervalMin = min(rotorIntervalMin, rotorIntervals[rotorIntervalsIndex]);
-    rotorIntervalsIndex++;
-  }
-  rotorLastSwitch = currentMillis;
-}
-
-void updateRotorValues() {
-  if (millis() - rotorLastSwitch > 500) {
-    rotorInterval = UINT_MAX;
-    rotorLastSwitch = 0;
-    for(int i = 0; i < ROTOR_SAMPLES; i++) {
-      rotorIntervals[i] = UINT_MAX;
-    }
-  }
-  unsigned long sum = 0;
-  for(int i = 0; i < ROTOR_SAMPLES; i++) {
-    sum += rotorIntervals[i];
-  }
-  rotorInterval = sum / ROTOR_SAMPLES;
-}
-
-void switchOutput1() {
-  outStatus1 = !outStatus1;
-  if (outStatus1) {
+void setOutput1(bool status) {
+  outputStatus1 = status;
+  if (status) {
     digitalWrite(OUTPUT_PIN1, LOW);
     digitalWrite(RXLED, LOW);   // set the RX LED ON
   } else {
@@ -97,9 +65,9 @@ void switchOutput1() {
   }
 }
 
-void switchOutput2() {
-  outStatus2 = !outStatus2;
-  if (outStatus2) {
+void setOutput2(bool status) {
+  outputStatus2 = status;
+  if (status) {
     digitalWrite(OUTPUT_PIN2, LOW);
     TXLED1; //TX LED macro to turn LED ON
   } else {
@@ -108,20 +76,65 @@ void switchOutput2() {
   }
 }
 
-void resetOutputs() {
-  if (outStatus1 || outStatus2) {
-    outStatus1 = false;
-    digitalWrite(RXLED, HIGH);
-    digitalWrite(OUTPUT_PIN1, HIGH);
+void onRotorRising1() {
+  if (accelerator < 10) {
+    setOutput1(true);
+  }
+}
 
-    outStatus2 = false;
-    TXLED0;
-    digitalWrite(OUTPUT_PIN2, HIGH);
+void onRotorFalling1() {
+  if (accelerator < 10) {
+    setOutput1(false);
+  }
+}
+
+void onRotorRising2() {
+  if (accelerator < 10) {
+    setOutput2(true);
+  }
+}
+
+void onRotorFalling2() {
+  if (accelerator < 10) {
+    setOutput2(false);
   }
 }
 
 unsigned int interval() {
-  return min(10 * 1024 / accelerator, rotorInterval);
+  return 10 * 1024 / accelerator;
+}
+
+void printStats(unsigned long t) {
+  if (t - lastStatOutput >= 1000) {
+    lastStatOutput = t;
+    // accelerator
+    Serial.print("accelerator: ");
+    Serial.print(accelerator);
+    Serial.print(", acceleratorMin: ");
+    Serial.print(acceleratorMin);
+    Serial.print(", acceleratorMax: ");
+    Serial.println(acceleratorMax);
+    // loop
+    Serial.print("loopDurationAvg: ");
+    Serial.print(float(loopDurationSum) / loopCount);
+    Serial.print(", loopDurationMin: ");
+    Serial.print(loopDurationMin);
+    Serial.print(", loopDurationMax: ");
+    Serial.println(loopDurationMax);
+
+    Serial.println();
+  }
+}
+
+void updateLoopStats(unsigned long t) {
+  unsigned long loopDuration = t - lastLoopT;
+  loopDurationSum += loopDuration;
+  loopCount++;
+  if (lastLoopT != 0) {
+    loopDurationMin = min(loopDurationMin, loopDuration);
+    loopDurationMax = max(loopDurationMax, loopDuration);
+  }
+  lastLoopT = t;
 }
 
 void setup() {
@@ -137,61 +150,35 @@ void setup() {
   }
   pinMode(ACCELERATOR_PIN, INPUT);
 
-  for(int i = 0; i < ROTOR_SAMPLES; i++) {
-    rotorIntervals[i] = UINT_MAX;
-  }
-  pinMode(ROTOR_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN), onRotorInterrupt, CHANGE);
+  pinMode(ROTOR_PIN1, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorRising1, RISING);
+  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorFalling1, FALLING);
 
-  lastOutputSwitch = millis();
+  pinMode(ROTOR_PIN2, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN2), onRotorRising2, RISING);
+  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN2), onRotorFalling2, FALLING);
+
+  lastOutputSwitchT = millis();
 }
 
 void loop() {
-  unsigned long currentMillis = millis();
-  unsigned long loopDuration = currentMillis - lastLoop;
-  loopDurationSum += loopDuration;
-  loopCount++;
-  if (lastLoop != 0) {
-    loopDurationMin = min(loopDurationMin, loopDuration);
-    loopDurationMax = max(loopDurationMax, loopDuration);
-  }
-  lastLoop = currentMillis;
+  unsigned long t = millis();
+  updateLoopStats(t);
   readAccelerator();
-  updateRotorValues();
-  if (accelerator < 10 && rotorInterval == UINT_MAX) {
-    resetOutputs();
-  } else {
-    if (currentMillis - lastOutputSwitch >= interval()) {
-      lastOutputSwitch = currentMillis;
-      switchOutput1();
+  if (accelerator >= 10) {
+    if (t - lastOutputSwitchT >= 1000) {
+      lastOutputSwitchT = t;
+      setOutput1(true);
+      setOutput2(false);
     }
-    if (currentMillis - lastOutputSwitch >= interval() / 3 && outStatus1 != outStatus2) {
-      switchOutput2();
+    if (t - lastOutputSwitchT >= interval()) {
+      lastOutputSwitchT = t;
+      setOutput1(!outputStatus1);
+    }
+    if (t - lastOutputSwitchT >= interval() / 3 && outputStatus1 != outputStatus2) {
+      setOutput2(!outputStatus2);
     }
   }
-  if (currentMillis - lastStatOutput >= 1000) {
-    lastStatOutput = currentMillis;
-    // accelerator
-    Serial.print("accelerator: ");
-    Serial.print(accelerator);
-    Serial.print(", acceleratorMin: ");
-    Serial.print(acceleratorMin);
-    Serial.print(", acceleratorMax: ");
-    Serial.println(acceleratorMax);
-    // rotor
-    Serial.print("rotorInterval: ");
-    Serial.print(rotorInterval);
-    Serial.print(", rotorIntervalMin: ");
-    Serial.println(rotorIntervalMin);
-    // loop
-    Serial.print("loopDurationAvg: ");
-    Serial.print(float(loopDurationSum) / loopCount);
-    Serial.print(", loopDurationMin: ");
-    Serial.print(loopDurationMin);
-    Serial.print(", loopDurationMax: ");
-    Serial.println(loopDurationMax);
-
-    Serial.println();
-  }
+  printStats(t);
   // delayMicroseconds(500);
 }
