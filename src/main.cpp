@@ -10,8 +10,6 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 #define ACCELERATOR_PIN A3
 #define ROTOR_PIN1 9
 #define OUTPUT_PIN1 8
-#define ROTOR_PIN2 10
-#define OUTPUT_PIN2 16
 
 // output status
 bool outputStatus1 = false;
@@ -65,17 +63,6 @@ void setOutput1(bool status) {
   }
 }
 
-void setOutput2(bool status) {
-  outputStatus2 = status;
-  if (status) {
-    digitalWrite(OUTPUT_PIN2, LOW);
-    TXLED1; //TX LED macro to turn LED ON
-  } else {
-    digitalWrite(OUTPUT_PIN2, HIGH);
-    TXLED0; //TX LED is not tied to a normally controlled pin so a macro is needed, turn LED OFF
-  }
-}
-
 void onRotorRising1() {
   if (accelerator < 10) {
     setOutput1(true);
@@ -85,18 +72,6 @@ void onRotorRising1() {
 void onRotorFalling1() {
   if (accelerator < 10) {
     setOutput1(false);
-  }
-}
-
-void onRotorRising2() {
-  if (accelerator < 10) {
-    setOutput2(true);
-  }
-}
-
-void onRotorFalling2() {
-  if (accelerator < 10) {
-    setOutput2(false);
   }
 }
 
@@ -139,9 +114,7 @@ void updateLoopStats(unsigned long t) {
 
 void setup() {
   pinMode(OUTPUT_PIN1, OUTPUT);
-  pinMode(OUTPUT_PIN2, OUTPUT);
   pinMode(RXLED, OUTPUT);  // Set RX LED as an output
-  // TX LED is set as an output behind the scenes
 
   Serial.begin(9600); //This pipes to the serial monitor
 
@@ -154,10 +127,6 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorRising1, RISING);
   attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorFalling1, FALLING);
 
-  pinMode(ROTOR_PIN2, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN2), onRotorRising2, RISING);
-  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN2), onRotorFalling2, FALLING);
-
   lastOutputSwitchT = millis();
 }
 
@@ -169,14 +138,10 @@ void loop() {
     if (t - lastOutputSwitchT >= 1000) {
       lastOutputSwitchT = t;
       setOutput1(true);
-      setOutput2(false);
     }
     if (t - lastOutputSwitchT >= interval()) {
       lastOutputSwitchT = t;
       setOutput1(!outputStatus1);
-    }
-    if (t - lastOutputSwitchT >= interval() / 3 && outputStatus1 != outputStatus2) {
-      setOutput2(!outputStatus2);
     }
   }
   printStats(t);
