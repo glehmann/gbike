@@ -10,6 +10,7 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 #define ACCELERATOR_PIN A3
 #define ROTOR_PIN1 9
 #define OUTPUT_PIN1 8
+#define OUTPUT_ON_RATIO 2.0/3
 
 // output status
 bool outputStatus1 = false;
@@ -76,7 +77,7 @@ void onRotorFalling1() {
 }
 
 unsigned int interval() {
-  return 10 * 1024 / accelerator;
+  return (10 * 1024 / accelerator) * (outputStatus1 ? OUTPUT_ON_RATIO : (1 - OUTPUT_ON_RATIO));
 }
 
 void printStats(unsigned long t) {
