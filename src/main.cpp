@@ -8,9 +8,9 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 //  and RXLED0.)
 
 #define ACCELERATOR_PIN A3
-#define ROTOR_PIN1 9
+#define ROTOR_PIN1 3
 #define OUTPUT_PIN1 8
-#define OUTPUT_ON_RATIO 2.0/3
+#define OUTPUT_ON_RATIO 1.0/3
 
 // output status
 bool outputStatus1 = false;
@@ -27,7 +27,7 @@ unsigned long loopCount = 0;
 
 // accelerator reading
 #define ACCELERATOR_SAMPLES 10
-#define ACCELERATOR_MIN 250
+#define ACCELERATOR_MIN 260
 #define ACCELERATOR_MAX 802
 int acceleratorValues[ACCELERATOR_SAMPLES];
 int acceleratorIndex = 0;
@@ -56,28 +56,23 @@ void readAccelerator() {
 void setOutput1(bool status) {
   outputStatus1 = status;
   if (status) {
-    digitalWrite(OUTPUT_PIN1, LOW);
+    digitalWrite(OUTPUT_PIN1, HIGH);
     digitalWrite(RXLED, LOW);   // set the RX LED ON
   } else {
-    digitalWrite(OUTPUT_PIN1, HIGH);
+    digitalWrite(OUTPUT_PIN1, LOW);
     digitalWrite(RXLED, HIGH);    // set the RX LED OFF
   }
 }
 
-void onRotorRising1() {
+void onRotorInterrupt() {
   if (accelerator < 10) {
-    setOutput1(true);
-  }
-}
-
-void onRotorFalling1() {
-  if (accelerator < 10) {
-    setOutput1(false);
+    setOutput1(digitalRead(ROTOR_PIN1) == HIGH);
   }
 }
 
 unsigned int interval() {
-  return (10 * 1024 / accelerator) * (outputStatus1 ? OUTPUT_ON_RATIO : (1 - OUTPUT_ON_RATIO));
+  float v = (accelerator * (720.0-60) / 1024.0) + 60;
+  return (20 * 1024 / v) * (outputStatus1 ? OUTPUT_ON_RATIO : (1 - OUTPUT_ON_RATIO));
 }
 
 void printStats(unsigned long t) {
@@ -125,8 +120,7 @@ void setup() {
   pinMode(ACCELERATOR_PIN, INPUT);
 
   pinMode(ROTOR_PIN1, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorRising1, RISING);
-  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorFalling1, FALLING);
+  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorInterrupt, CHANGE);
 
   lastOutputSwitchT = millis();
 }
