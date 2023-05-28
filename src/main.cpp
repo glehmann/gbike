@@ -35,12 +35,6 @@ unsigned int accelerator = 0;
 unsigned int acceleratorMin = UINT_MAX;
 unsigned int acceleratorMax = 0;
 
-// rotor reading
-#define ROTOR_SAMPLES 10
-int rotorValues[ROTOR_SAMPLES];
-int rotorIndex = 0;
-unsigned int rotor = LOW;
-
 void readAccelerator() {
   unsigned int value = analogRead(ACCELERATOR_PIN);
   acceleratorMin = min(acceleratorMin, value);
@@ -59,21 +53,6 @@ void readAccelerator() {
   accelerator = (unsigned int)(sum);
 }
 
-void readRotor() {
-  unsigned int value = digitalRead(ROTOR_PIN1);
-  rotorValues[rotorIndex] = value;
-  rotorIndex = (rotorIndex + 1) % ROTOR_SAMPLES;
-  int count = 0;
-  for(int i = 0; i < ROTOR_SAMPLES; i++) {
-    count += rotorValues[i] == true ? 1 : 0;
-  }
-  if (count == ROTOR_SAMPLES) {
-    rotor = HIGH;
-  } else if (count == 0) {
-    rotor = LOW;
-  }
-}
-
 void setOutput1(bool status) {
   outputStatus1 = status;
   if (status) {
@@ -82,6 +61,12 @@ void setOutput1(bool status) {
   } else {
     digitalWrite(OUTPUT_PIN1, LOW);
     digitalWrite(RXLED, HIGH);    // set the RX LED OFF
+  }
+}
+
+void onRotorInterrupt() {
+  if (accelerator < 10) {
+    setOutput1(digitalRead(ROTOR_PIN1) == HIGH);
   }
 }
 
@@ -134,10 +119,8 @@ void setup() {
   }
   pinMode(ACCELERATOR_PIN, INPUT);
 
-  for(int i = 0; i < ROTOR_SAMPLES; i++) {
-    rotorValues[i] = 0;
-  }
   pinMode(ROTOR_PIN1, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorInterrupt, CHANGE);
 
   lastOutputSwitchT = millis();
 }
@@ -146,7 +129,6 @@ void loop() {
   unsigned long t = millis();
   updateLoopStats(t);
   readAccelerator();
-  readRotor();
   if (accelerator >= 10) {
     if (t - lastOutputSwitchT >= 1000) {
       lastOutputSwitchT = t;
@@ -156,8 +138,6 @@ void loop() {
       lastOutputSwitchT = t;
       setOutput1(!outputStatus1);
     }
-  } else {
-    setOutput1(rotor);
   }
   printStats(t);
   // delayMicroseconds(500);
