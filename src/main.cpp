@@ -8,7 +8,7 @@ int RXLED = 17;  // The RX LED has a defined Arduino pin
 //  and RXLED0.)
 
 #define ACCELERATOR_PIN A3
-#define ROTOR_PIN1 A6
+#define ROTOR_PIN1 3
 #define OUTPUT_PIN1 8
 #define OUTPUT_ON_RATIO 1.0/3
 
@@ -36,10 +36,10 @@ unsigned int acceleratorMin = UINT_MAX;
 unsigned int acceleratorMax = 0;
 
 // rotor reading
-#define ROTOR_SAMPLES 4
+#define ROTOR_SAMPLES 10
 int rotorValues[ROTOR_SAMPLES];
 int rotorIndex = 0;
-unsigned int rotor = 0;
+unsigned int rotor = LOW;
 
 void readAccelerator() {
   unsigned int value = analogRead(ACCELERATOR_PIN);
@@ -60,15 +60,18 @@ void readAccelerator() {
 }
 
 void readRotor() {
-  unsigned int value = analogRead(ROTOR_PIN1);
+  unsigned int value = digitalRead(ROTOR_PIN1);
   rotorValues[rotorIndex] = value;
   rotorIndex = (rotorIndex + 1) % ROTOR_SAMPLES;
-  float sum = 0;
+  int count = 0;
   for(int i = 0; i < ROTOR_SAMPLES; i++) {
-    sum += rotorValues[i];
+    count += rotorValues[i] == true ? 1 : 0;
   }
-  sum /= ROTOR_SAMPLES;
-  rotor = sum;
+  if (count == ROTOR_SAMPLES) {
+    rotor = HIGH;
+  } else if (count == 0) {
+    rotor = LOW;
+  }
 }
 
 void setOutput1(bool status) {
@@ -97,9 +100,6 @@ void printStats(unsigned long t) {
     Serial.print(acceleratorMin);
     Serial.print(", acceleratorMax: ");
     Serial.println(acceleratorMax);
-    // accelerator
-    Serial.print("rotor: ");
-    Serial.println(rotor);
     // loop
     Serial.print("loopDurationAvg: ");
     Serial.print(float(loopDurationSum) / loopCount);
@@ -137,7 +137,7 @@ void setup() {
   for(int i = 0; i < ROTOR_SAMPLES; i++) {
     rotorValues[i] = 0;
   }
-  pinMode(ROTOR_PIN1, INPUT);
+  pinMode(ROTOR_PIN1, INPUT_PULLUP);
 
   lastOutputSwitchT = millis();
 }
@@ -157,7 +157,7 @@ void loop() {
       setOutput1(!outputStatus1);
     }
   } else {
-    setOutput1(rotor > 512);
+    setOutput1(rotor);
   }
   printStats(t);
   // delayMicroseconds(500);
