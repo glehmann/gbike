@@ -122,6 +122,10 @@ void setup() {
   pinMode(ROTOR_PIN1, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(ROTOR_PIN1), onRotorInterrupt, CHANGE);
 
+  // VCC for the rotor
+  pinMode(4, OUTPUT);
+  digitalWrite(4, HIGH);
+
   lastOutputSwitchT = millis();
 }
 
